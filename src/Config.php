@@ -1,0 +1,62 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Niang\Core;
+
+class Config
+{
+    private static ?array $items = null;
+
+    public static function load(string $basePath): void
+    {
+        $cached = ConfigCache::load();
+
+        if ($cached !== null) {
+            self::$items = $cached;
+            return;
+        }
+
+        self::$items = [];
+
+        foreach (glob($basePath . '/config/*.php') ?: [] as $file) {
+            self::$items[basename($file, '.php')] = require $file;
+        }
+    }
+
+    /**
+     * Modifie une valeur pour la suite du process (pas le fichier), ex. dans un test :
+     * Config::set('logging.level', 'error').
+     */
+    public static function set(string $key, mixed $value): void
+    {
+        self::$items ??= [];
+        $target = &self::$items;
+
+        foreach (explode('.', $key) as $segment) {
+            if (!isset($target[$segment]) || !is_array($target[$segment])) {
+                $target[$segment] = [];
+            }
+
+            $target = &$target[$segment];
+        }
+
+        $target = $value;
+    }
+
+    /** Accès en notation pointée, ex: config('app.providers') */
+    public static function get(string $key, mixed $default = null): mixed
+    {
+        $value = self::$items ?? [];
+
+        foreach (explode('.', $key) as $segment) {
+            if (!is_array($value) || !array_key_exists($segment, $value)) {
+                return $default;
+            }
+
+            $value = $value[$segment];
+        }
+
+        return $value;
+    }
+}
